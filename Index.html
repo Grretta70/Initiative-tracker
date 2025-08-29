@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>DM Initiative Tracker</title>
+<style>
+  :root {
+    --bg:#1e1e1e; --panel:#2c2c2c; --muted:#3c3c3c; --text:#e0e0e0;
+    --border:#444; --head:#424242; --btn:#757575; --btnH:#616161; --accent:#a5d6a7;
+  }
+  *{box-sizing:border-box}
+  body{
+    font-family:Arial,sans-serif;
+    background:var(--bg);
+    color:var(--text);
+    margin:0;
+    padding:10px;
+    font-size:1rem;  /* bigger base font */
+  }
+  h1{text-align:center;font-size:1.5rem;margin:10px 0}
+
+  #add-form{
+    background:var(--panel);
+    padding:15px;
+    border-radius:8px;
+    box-shadow:0 0 10px rgba(0,0,0,0.5);
+    margin-bottom:15px
+  }
+  #add-form select,#add-form input,#add-form button{
+    margin:4px 0;
+    padding:10px;
+    width:100%;
+    background:var(--muted);
+    color:var(--text);
+    border:1px solid #555;
+    border-radius:4px;
+    font-size:1rem;
+  }
+  #add-form button{background:var(--btn);color:var(--bg);border:none;cursor:pointer}
+  #add-form button:hover{background:var(--btnH)}
+
+  .table-wrap{max-height:50vh;overflow:auto;border-radius:8px;box-shadow:0 0 10px rgba(0,0,0,0.5)}
+  table{width:100%;border-collapse:separate;border-spacing:0;background:var(--panel)}
+  th,td{
+    border:1px solid var(--border);
+    padding:10px;            /* slightly more padding */
+    text-align:left;
+    font-size:1rem;          /* bumped up */
+    vertical-align:top;
+    word-break:normal;
+    white-space:nowrap;      /* stop Initiative from wrapping */
+  }
+  thead th{background:var(--head);color:#fff}
+
+  /* Column width guidance */
+  thead th:nth-child(1), tbody td:nth-child(1){width:28%} /* Name */
+  thead th:nth-child(2), tbody td:nth-child(2){
+    width:12%; min-width:90px; /* Initiative wider so header fits */
+  }
+  thead th:nth-child(3), tbody td:nth-child(3){width:14%} /* HP */
+  thead th:nth-child(4), tbody td:nth-child(4){width:10%} /* AC */
+  thead th:nth-child(5), tbody td:nth-child(5){width:22%} /* Conditions */
+  thead th:nth-child(6), tbody td:nth-child(6){width:12%} /* Notes */
+  thead th:nth-child(7), tbody td:nth-child(7){
+    width:96px; min-width:96px; text-align:center; white-space:nowrap;
+  }
+
+  tr.current-turn{background:rgba(165,214,167,0.10)}
+  tr.current-turn td:first-child{border-left:6px solid var(--accent)}
+
+  .chip{display:inline-flex;align-items:center;gap:6px;background:#444;padding:4px 8px;margin:2px;border-radius:12px;font-size:0.9rem}
+  .chip button{background:#555;border:none;color:#eee;border-radius:10px;padding:2px 8px;cursor:pointer}
+  .chip button:hover{background:#666}
+
+  #controls,#save-load,#round-tracker{text-align:center;margin-top:10px}
+  #controls button,#save-load button{
+    padding:8px 16px;
+    margin:0 5px;
+    background:var(--btn);
+    color:var(--bg);
+    border:none;
+    border-radius:4px;
+    cursor:pointer;
+    font-size:1rem;
+  }
+  #controls button:hover,#save-load button:hover{background:var(--btnH)}
+  #round-tracker input{
+    width:50px;
+    background:var(--muted);
+    color:var(--text);
+    border:1px solid #555;
+    border-radius:4px;
+    padding:5px;
+    text-align:center;
+    font-size:1rem;
+  }
+
+  td input[type="number"], td input[type="text"]{
+    width:100%; max-width:120px;
+    background:var(--muted);
+    color:var(--text);
+    border:1px solid #555;
+    border-radius:4px;
+    padding:6px;
+    font-size:1rem;
+  }
+
+  .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,0.6);display:none;align-items:center;justify-content:center;z-index:1000}
+  .modal{background:var(--panel);border:1px solid var(--border);border-radius:10px;max-width:90%;width:400px;padding:12px;box-shadow:0 10px 30px rgba(0,0,0,0.6)}
+  .modal h3{margin:0 0 8px;font-size:1.1rem}
+  .tie-row{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;margin:4px 0}
+  .modal small{color:#bbb;font-size:0.8rem}
+  .modal footer{display:flex;justify-content:flex-end;gap:8px;margin-top:10px}
+  .modal button{background:var(--btn);color:var(--bg);border:none;border-radius:6px;padding:8px 12px;cursor:pointer;font-size:0.9rem}
+  .modal button:hover{background:var(--btnH)}
+  .modal label{display:block;margin:4px 0}
+  .sr-only{position:absolute;left:-9999px}
+</style>
+</head>
+<body>
+  <h1>DM Initiative Tracker</h1>
+
+  <div id="add-form">
+    <h2>Add Combatant</h2>
+    <select id="name">
+      <option value="">Select or enter name</option>
+      <option value="custom">Custom</option>
+    </select>
+    <input type="text" id="custom-name" placeholder="Custom Name" style="display:none;">
+    <input type="number" id="initiative" placeholder="Initiative (optional if you Roll)">
+    <input type="number" id="init-bonus" placeholder="Initiative Bonus (optional)">
+    <input type="number" id="hp" placeholder="HP">
+    <input type="number" id="ac" placeholder="AC">
+    <input type="text" id="notes" placeholder="Notes (optional)">
+    <button id="btn-add">Add</button>
+    <button id="btn-roll">Roll Initiative (uses bonus)</button>
+  </div>
+
+  <div class="table-wrap">
+    <table id="initiative-table" aria-describedby="sr-announcer">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Initiative</th>
+          <th>HP</th>
+          <th>AC</th>
+          <th>Conditions</th>
+          <th>Notes</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="initiative-body"></tbody>
+    </table>
+  </div>
+
+  <div id="round-tracker">
+    <h3>Round: <input type="number" id="round" value="1" min="1"></h3>
+  </div>
+
+  <div id="controls">
+    <button id="btn-start">Start Combat</button>
+    <button id="btn-next">Next Turn</button>
+    <button id="btn-reset">Reset Turns</button>
+    <button id="btn-sort">Sort Initiative</button>
+  </div>
+
+  <div id="save-load">
+    <button id="btn-save">Save State</button>
+    <button id="btn-load">Load State</button>
+  </div>
+
+  <!-- Screen reader announcements -->
+  <div id="sr-announcer" class="sr-only" aria-live="polite"></div>
+
+  <!-- Tie-breaker modal -->
+  <div id="tie-backdrop" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="tie-title">
+    <div class="modal">
+      <h3 id="tie-title">Choose who goes first</h3>
+      <p style="margin-top:-4px"><small>These combatants share the same initiative. Set their order (1 = acts first). Defaults follow highest bonus.</small></p>
+      <div id="tie-rows"></div>
+      <footer>
+        <button id="tie-cancel">Cancel</button>
+        <button id="tie-apply">Apply Order</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- Add Condition modal -->
+  <div id="add-cond-backdrop" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="add-cond-title">
+    <div class="modal">
+      <h3 id="add-cond-title">Add Condition to <span id="add-cond-name"></span></h3>
+      <select id="add-cond-select">
+        <option value="">Select condition</option>
+        <option value="custom">Custom</option>
+      </select>
+      <input type="text" id="add-cond-custom" placeholder="Custom condition" style="display:none;">
+      <label><input type="radio" name="cond-type" value="persistent" checked> Persistent (manual remove)</label>
+      <label><input type="radio" name="cond-type" value="duration"> Duration (rounds)</label>
+      <input type="number" id="add-cond-turns" placeholder="Number of rounds" style="display:none; margin-left:20px;">
+      <label><input type="radio" name="cond-type" value="save"> Save ends (at end of turn)</label>
+      <footer>
+        <button id="add-cond-cancel">Cancel</button>
+        <button id="add-cond-apply">Add</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- Save Against Condition modal -->
+  <div id="save-backdrop" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="save-title">
+    <div class="modal">
+      <h3 id="save-title">Save Against Condition</h3>
+      <p id="save-prompt"></p>
+      <footer>
+        <button id="save-fail">Fail</button>
+        <button id="save-succeed">Succeed</button>
+      </footer>
+    </div>
+  </div>
+
+<script>
+(() => {
+  const players = {
+    Aric:     { hp:160, ac:18, initMod:9 },
+    Danumo:   { hp:107, ac:17, initMod:9 },
+    Hjalmarr: { hp:194, ac:20, initMod:6 },
+    Marylyn:  { hp:156, ac:21, initMod:2 }
+  };
+  const commonConditions = ['Blinded', 'Charmed', 'Deafened', 'Frightened', 'Grappled', 'Incapacitated', 'Invisible', 'Paralyzed', 'Petrified', 'Poisoned', 'Prone', 'Restrained', 'Stunned', 'Unconscious'];
+  let combatants = [];
+  let currentTurn = -1;
+  let round = 1;
+
+  const selName = document.getElementById("name");
+  const inpCustom = document.getElementById("custom-name");
+  const inpInit = document.getElementById("initiative");
+  const inpInitBonus = document.getElementById("init-bonus");
+  const inpHP = document.getElementById("hp");
+  const inpAC = document.getElementById("ac");
+  const inpNotes = document.getElementById("notes");
+  const tbody = document.getElementById("initiative-body");
+  const inpRound = document.getElementById("round");
+  const table = document.getElementById("initiative-table");
+  const srAnnouncer = document.getElementById("sr-announcer");
+
+  function populateDropdown() {
+    Object.keys(players).forEach(name => {
+      const opt = document.createElement("option");
+      opt.value = name;
+      opt.textContent = name;
+      selName.appendChild(opt);
+    });
+  }
+
+  function populateConditionDropdown() {
+    const sel = document.getElementById('add-cond-select');
+    commonConditions.forEach(cond => {
+      const opt = document.createElement('option');
+      opt.value = cond.toLowerCase();
+      opt.textContent = cond;
+      sel.appendChild(opt);
+    });
+  }
+
+  selName.addEventListener("change", () => {
+    const value = selName.value;
+    if (value === "custom") {
+      inpCustom.style.display = "block";
+      inpHP.value = "";
+      inpAC.value = "";
+      inpInitBonus.value = "";
+    } else {
+      inpCustom.style.display = "none";
+      const p = players[value];
+      if (p) {
+        inpHP.value = p.hp;
+        inpAC.value = p.ac;
+        inpInitBonus.value = p.initMod;
+      }
+    }
+  });
+
+  function clearForm() {
+    selName.value = "";
+    inpCustom.value = "";
+    inpCustom.style.display = "none";
+    inpInit.value = "";
+    inpInitBonus.value = "";
+    inpHP.value = "";
+    inpAC.value = "";
+    inpNotes.value = "";
+  }
+
+  function addCombatant(initOverride = null) {
+    let name = selName.value === "custom" ? inpCustom.value.trim() : selName.value;
+    if (!name) return;
+    const initBonus = parseInt(inpInitBonus.value) || 0;
+    let initiative = initOverride !== null ? initOverride : (parseInt(inpInit.value) || 0);
+    if (initOverride === null && inpInit.value) {
+      initiative += initBonus;
+    }
+    const hp = parseInt(inpHP.value) || 0;
+    const ac = parseInt(inpAC.value) || 0;
+    const notes = inpNotes.value || "";
+    combatants.push({ name, initiative, initBonus, hp, ac, conditions: [], notes });
+    renderTable();
+    clearForm();
+  }
+
+  function rollInitiative() {
+    let name = selName.value === "custom" ? inpCustom.value.trim() : selName.value;
+    if (!name) return;
+    const mod = parseInt(inpInitBonus.value) || 0;
+    const roll = Math.floor(Math.random() * 20) + 1 + mod;
+    addCombatant(roll);
+  }
+
+  function renderTable() {
+    tbody.innerHTML = "";
+    combatants.forEach((c, i) => {
+      const tr = document.createElement("tr");
+      if (i === currentTurn) tr.classList.add("current-turn");
+      let conditionsHtml = c.conditions.map((cond, j) => {
+        let extra = '';
+        if (cond.turns_left !== null) extra = `(${cond.turns_left})`;
+        else if (cond.save_ends) extra = '(save)';
+        return `<span class="chip">${cond.name} ${extra}<button class="remove-cond" data-cond-index="${j}">x</button></span>`;
+      }).join('');
+      tr.innerHTML = `
+        <td>${c.name}</td>
+        <td><input type="number" class="init-input" value="${c.initiative}" data-index="${i}"></td>
+        <td><input type="number" class="hp-input" value="${c.hp}" data-index="${i}"></td>
+        <td>${c.ac}</td>
+        <td><div class="conditions" data-index="${i}">${conditionsHtml} <button class="add-cond" data-index="${i}">+</button></div></td>
+        <td><input type="text" class="notes-input" value="${c.notes}" data-index="${i}"></td>
+        <td><button class="remove" data-index="${i}">Remove</button></td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  function sortInitiative() {
+    combatants.sort((a, b) => {
+      if (b.initiative !== a.initiative) return b.initiative - a.initiative;
+      if (b.initBonus !== a.initBonus) return b.initBonus - a.initBonus;
+      return a.name.localeCompare(b.name);
+    });
+  }
+
+  function findTies() {
+    const initiativeGroups = {};
+    combatants.forEach((c, i) => {
+      if (!initiativeGroups[c.initiative]) {
+        initiativeGroups[c.initiative] = [];
+      }
+      initiativeGroups[c.initiative].push(i);
+    });
+    return Object.values(initiativeGroups).filter(group => group.length > 1);
+  }
+
+  function showTieBreakerModal(tiedGroups, callback) {
+    if (tiedGroups.length === 0) {
+      callback();
+      return;
+    }
+
+    const tieRows = document.getElementById('tie-rows');
+    const backdrop = document.getElementById('tie-backdrop');
+    const cancelBtn = document.getElementById('tie-cancel');
+    const applyBtn = document.getElementById('tie-apply');
+    let currentGroupIndex = 0;
+
+    const renderGroup = () => {
+      tieRows.innerHTML = '';
+      const group = tiedGroups[currentGroupIndex];
+      group.forEach((combatantIndex, i) => {
+        const c = combatants[combatantIndex];
+        const row = document.createElement('div');
+        row.className = 'tie-row';
+        row.innerHTML = `
+          <span>${c.name} (Bonus: ${c.initBonus})</span>
+          <input type="number" class="tie-order" data-index="${combatantIndex}" value="${i + 1}" min="1">
+          <button class="tie-up" data-index="${combatantIndex}">&#8679;</button>
+          <button class="tie-down" data-index="${combatantIndex}">&#8681;</button>
+        `;
+        tieRows.appendChild(row);
+      });
+      backdrop.style.display = 'flex';
+    };
+
+    const handleCancel = () => {
+      backdrop.style.display = 'none';
+      cleanup();
+    };
+
+    const handleApply = () => {
+      const inputs = tieRows.querySelectorAll('.tie-order');
+      const orders = Array.from(inputs).map(input => ({
+        index: parseInt(input.dataset.index),
+        order: parseInt(input.value) || 999
+      }));
+      const group = tiedGroups[currentGroupIndex];
+      const groupCombatants = group.map(idx => ({ ...combatants[idx], index: idx }));
+      groupCombatants.sort((a, b) => {
+        const orderA = orders.find(o => o.index === a.index).order;
+        const orderB = orders.find(o => o.index === b.index).order;
+        if (orderA !== orderB) return orderA - orderB;
+        return b.initBonus - a.initBonus;
+      });
+      groupCombatants.forEach((c, i) => {
+        combatants[c.index] = { ...c, index: undefined };
+      });
+      currentGroupIndex++;
+      if (currentGroupIndex < tiedGroups.length) {
+        renderGroup();
+      } else {
+        backdrop.style.display = 'none';
+        cleanup();
+        callback();
+      }
+    };
+
+    const handleUpDown = (e, direction) => {
+      const combatantIndex = parseInt(e.target.dataset.index);
+      const inputs = Array.from(tieRows.querySelectorAll('.tie-order'));
+      const currentInput = inputs.find(input => parseInt(input.dataset.index) === combatantIndex);
+      const currentOrder = parseInt(currentInput.value) || 999;
+      let swapInput;
+      if (direction === 'up') {
+        swapInput = inputs.find(input => parseInt(input.value) === currentOrder - 1);
+      } else {
+        swapInput = inputs.find(input => parseInt(input.value) === currentOrder + 1);
+      }
+      if (swapInput) {
+        const temp = currentInput.value;
+        currentInput.value = swapInput.value;
+        swapInput.value = temp;
+      }
+    };
+
+    const cleanup = () => {
+      cancelBtn.removeEventListener('click', handleCancel);
+      applyBtn.removeEventListener('click', handleApply);
+      tieRows.removeEventListener('click', handleUpDownClick);
+    };
+
+    const handleUpDownClick = (e) => {
+      if (e.target.classList.contains('tie-up')) {
+        handleUpDown(e, 'up');
+      } else if (e.target.classList.contains('tie-down')) {
+        handleUpDown(e, 'down');
+      }
+    };
+
+    cancelBtn.addEventListener('click', handleCancel);
+    applyBtn.addEventListener('click', handleApply);
+    tieRows.addEventListener('click', handleUpDownClick);
+
+    renderGroup();
+  }
+
+  function announce(text) {
+    srAnnouncer.textContent = text;
+  }
+
+  // Event delegation for table
+  table.addEventListener("change", (e) => {
+    const i = parseInt(e.target.dataset.index);
+    if (e.target.classList.contains("init-input")) {
+      combatants[i].initiative = parseInt(e.target.value) || 0;
+    } else if (e.target.classList.contains("hp-input")) {
+      combatants[i].hp = parseInt(e.target.value) || 0;
+    } else if (e.target.classList.contains("notes-input")) {
+      combatants[i].notes = e.target.value;
+    }
+  });
+
+  table.addEventListener("click", (e) => {
+    if (e.target.classList.contains("remove-cond")) {
+      const condsDiv = e.target.closest(".conditions");
+      const i = parseInt(condsDiv.dataset.index);
+      const j = parseInt(e.target.dataset.condIndex);
+      combatants[i].conditions.splice(j, 1);
+      renderTable();
+    } else if (e.target.classList.contains("remove")) {
+      const i = parseInt(e.target.dataset.index);
+      combatants.splice(i, 1);
+      if (currentTurn >= i) currentTurn--;
+      if (currentTurn >= combatants.length) currentTurn = -1;
+      renderTable();
+    } else if (e.target.classList.contains("add-cond")) {
+      const i = parseInt(e.target.dataset.index);
+      showAddCondModal(i);
+    }
+  });
+
+  inpRound.addEventListener("change", () => {
+    round = parseInt(inpRound.value) || 1;
+    if (round < 1) round = 1;
+    inpRound.value = round;
+  });
+
+  document.getElementById("btn-add").onclick = () => addCombatant();
+  document.getElementById("btn-roll").onclick = () => rollInitiative();
+
+  document.getElementById("btn-start").onclick = () => {
+    if (combatants.length === 0) return;
+    sortInitiative();
+    const tiedGroups = findTies();
+    showTieBreakerModal(tiedGroups, () => {
+      currentTurn = 0;
+      round = 1;
+      inpRound.value = 1;
+      renderTable();
+      announce(`Combat started. First turn: ${combatants[0].name}`);
+    });
+  };
+
+  document.getElementById("btn-next").onclick = () => {
+    if (currentTurn === -1 || combatants.length === 0) return;
+    const creature = combatants[currentTurn];
+    processEndOfTurn(creature, () => {
+      currentTurn = (currentTurn + 1) % combatants.length;
+      if (currentTurn === 0) {
+        round++;
+        inpRound.value = round;
+        announce(`Round ${round} begins. Turn: ${combatants[currentTurn].name}`);
+      } else {
+        announce(`Next turn: ${combatants[currentTurn].name}`);
+      }
+      renderTable();
+    });
+  };
+
+  document.getElementById("btn-reset").onclick = () => {
+    currentTurn = -1;
+    round = 1;
+    inpRound.value = 1;
+    renderTable();
+    announce("Turns reset");
+  };
+
+  document.getElementById("btn-sort").onclick = () => {
+    sortInitiative();
+    const tiedGroups = findTies();
+    showTieBreakerModal(tiedGroups, () => {
+      if (currentTurn !== -1) {
+        currentTurn = 0;
+      }
+      renderTable();
+      announce("Initiative sorted");
+    });
+  };
+
+  document.getElementById("btn-save").onclick = () => {
+    const state = { combatants, currentTurn, round };
+    localStorage.setItem("dm-initiative-state", JSON.stringify(state));
+    announce("State saved");
+  };
+
+  document.getElementById("btn-load").onclick = () => {
+    const saved = localStorage.getItem("dm-initiative-state");
+    if (saved) {
+      const state = JSON.parse(saved);
+      combatants = state.combatants;
+      currentTurn = state.currentTurn;
+      round = state.round;
+      inpRound.value = round;
+      renderTable();
+      announce("State loaded");
+    }
+  };
+
+  // Add Condition Modal Logic
+  const addCondSel = document.getElementById('add-cond-select');
+  addCondSel.addEventListener('change', () => {
+    document.getElementById('add-cond-custom').style.display = addCondSel.value === 'custom' ? 'block' : 'none';
+  });
+
+  document.querySelectorAll('input[name="cond-type"]').forEach(radio => {
+    radio.addEventListener('change', () => {
+      document.getElementById('add-cond-turns').style.display = radio.value === 'duration' ? 'block' : 'none';
+    });
+  });
+
+  function showAddCondModal(index) {
+    const backdrop = document.getElementById('add-cond-backdrop');
+    const nameSpan = document.getElementById('add-cond-name');
+    nameSpan.textContent = combatants[index].name;
+    addCondSel.value = '';
+    document.getElementById('add-cond-custom').value = '';
+    document.getElementById('add-cond-custom').style.display = 'none';
+    document.querySelector('input[name="cond-type"][value="persistent"]').checked = true;
+    document.getElementById('add-cond-turns').style.display = 'none';
+    document.getElementById('add-cond-turns').value = '';
+    backdrop.style.display = 'flex';
+
+    const cancelBtn = document.getElementById('add-cond-cancel');
+    const applyBtn = document.getElementById('add-cond-apply');
+
+    const handleCancel = () => {
+      backdrop.style.display = 'none';
+      cleanup();
+    };
+
+    const handleApply = () => {
+      let selValue = addCondSel.value;
+      let condName = selValue === 'custom' ? document.getElementById('add-cond-custom').value.trim() : selValue;
+      if (!condName) return;
+      condName = condName.charAt(0).toUpperCase() + condName.slice(1).toLowerCase();
+      const type = document.querySelector('input[name="cond-type"]:checked').value;
+      let turns_left = null;
+      let save_ends = false;
+      if (type === 'duration') {
+        turns_left = parseInt(document.getElementById('add-cond-turns').value) || 0;
+      } else if (type === 'save') {
+        save_ends = true;
+      }
+      combatants[index].conditions.push({ name: condName, turns_left, save_ends });
+      renderTable();
+      backdrop.style.display = 'none';
+      cleanup();
+    };
+
+    const cleanup = () => {
+      cancelBtn.removeEventListener('click', handleCancel);
+      applyBtn.removeEventListener('click', handleApply);
+    };
+
+    cancelBtn.addEventListener('click', handleCancel);
+    applyBtn.addEventListener('click', handleApply);
+  }
+
+  // Process End of Turn
+  function processEndOfTurn(creature, callback) {
+    // Handle durations
+    creature.conditions = creature.conditions.filter(cond => {
+      if (cond.turns_left !== null) {
+        cond.turns_left--;
+        if (cond.turns_left <= 0) {
+          return false;
+        }
+      }
+      return true;
+    });
+
+    // Handle saves
+    const saveConds = creature.conditions.filter(cond => cond.save_ends);
+    if (saveConds.length === 0) {
+      callback();
+      return;
+    }
+
+    let idx = 0;
+    const resolveNext = () => {
+      if (idx >= saveConds.length) {
+        renderTable();
+        callback();
+        return;
+      }
+      const cond = saveConds[idx];
+      showSaveModal(creature.name, cond.name, succeeded => {
+        if (succeeded) {
+          const condIdx = creature.conditions.findIndex(c => c === cond);
+          if (condIdx > -1) creature.conditions.splice(condIdx, 1);
+        }
+        idx++;
+        resolveNext();
+      });
+    };
+    resolveNext();
+  }
+
+  function showSaveModal(creatureName, condName, onResolve) {
+    const backdrop = document.getElementById('save-backdrop');
+    const prompt = document.getElementById('save-prompt');
+    prompt.textContent = `Does ${creatureName} succeed on their saving throw against ${condName}?`;
+    backdrop.style.display = 'flex';
+
+    const succeedBtn = document.getElementById('save-succeed');
+    const failBtn = document.getElementById('save-fail');
+
+    const handleSucceed = () => {
+      onResolve(true);
+      cleanup();
+    };
+
+    const handleFail = () => {
+      onResolve(false);
+      cleanup();
+    };
+
+    const cleanup = () => {
+      succeedBtn.removeEventListener('click', handleSucceed);
+      failBtn.removeEventListener('click', handleFail);
+      backdrop.style.display = 'none';
+    };
+
+    succeedBtn.addEventListener('click', handleSucceed);
+    failBtn.addEventListener('click', handleFail);
+  }
+
+  populateDropdown();
+  populateConditionDropdown();
+})();
+</script>
+</body>
+</html>
